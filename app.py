@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import shap  # SHAP for interpretability
+import prince  # For Correspondence Analysis
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
@@ -17,55 +17,46 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.decomposition import PCA
+from adjustText import adjust_text
+import shap  # SHAP for explainability
+import eli5  # For variable importance visualization
+from eli5.sklearn import PermutationImportance
 
 # Load the dataset
 data = pd.read_csv('approved_data.csv')
 st.write("Dataset loaded successfully!")
 
-# Define the SHAP explainer function
-def shap_explain(model, X_train):
-    explainer = shap.Explainer(model, X_train)
-    shap_values = explainer(X_train)
-    return shap_values
-
-# Function to evaluate models and show feature importance and SHAP values
+# Function to evaluate models
 def evaluate_models(models, X_train, y_train, X_test, y_test):
     results = {}
     shap_values_dict = {}
-    
-    for name, model in models.items():
+    for name in models.keys():
+        model = models[name]
         pipeline = Pipeline(steps=[('preprocessor', preprocessor),
                                    ('classifier', model)])
         pipeline.fit(X_train, y_train)
-        
         y_pred = pipeline.predict(X_test)
         accuracy = accuracy_score(y_test, y_pred)
         results[name] = accuracy
-
-        # Feature importance (only for tree-based models)
-        if hasattr(model, "feature_importances_"):
-            st.subheader(f"Feature Importance for {name}")
-            importance = model.feature_importances_
-            importance_df = pd.DataFrame({'Feature': X_train.columns, 'Importance': importance})
-            importance_df = importance_df.sort_values(by="Importance", ascending=False)
-            st.write(importance_df)
-
-            # Plot feature importance
-            fig, ax = plt.subplots()
-            sns.barplot(x="Importance", y="Feature", data=importance_df, ax=ax)
-            ax.set_title(f"{name} - Feature Importance")
-            st.pyplot(fig)
-
-        # SHAP values
-        st.subheader(f"SHAP Values for {name}")
-        shap_values = shap_explain(pipeline, X_train)
-        shap_values_dict[name] = shap_values
-
-        # Plot SHAP summary
-        shap.summary_plot(shap_values, X_train, plot_type="bar", show=False)
-        st.pyplot(bbox_inches='tight')
-    
+        
+        # SHAP explanation
+        shap_values_dict[name] = shap_explain(pipeline, X_train)
+        
     return results, shap_values_dict
+
+# SHAP explanation function
+def shap_explain(pipeline, X_train):
+    # Extract the classifier from the pipeline
+    model = pipeline.named_steps['classifier']
+    
+    # Create SHAP explainer using the model and the data
+    explainer = shap.Explainer(model, X_train)
+    
+    # Get SHAP values
+    shap_values = explainer(X_train)
+    
+    return shap_values
 
 # Streamlit interface
 st.title('Life Insurance Underwriting')
@@ -96,17 +87,37 @@ with tab1:
         ax.set_xlabel(column)
         ax.set_ylabel("Percentage")
 
+        # Annotate bars with percentages
         for p in ax.patches:
             ax.annotate(f'{p.get_height():.2f}%', (p.get_x() + p.get_width() / 2., p.get_height()), 
                         ha='center', va='center', fontsize=11, color='black', xytext=(0, 10),
                         textcoords='offset points')
 
+        # Set custom x-axis labels for Smoking Status
+        if column == 'Smoking Status':
+            ax.set_xticks([0, 1])
+            ax.set_xticklabels(['Non-Smoker (0)', 'Smoker (1)'])
+
+        # Set custom x-axis labels for Medical History
+        if column == 'Medical History':
+            ax.set_xticks([0, 1, 2, 3])
+            ax.set_xticklabels(['No Disease (0)', 'Diabetes (1)', 'Hypertension (2)', 'Heart Disease (3)'])
+
+        # Set custom x-axis labels for Alcohol Consumption
+        if column == 'Alcohol Consumption':
+            ax.set_xticks([0, 1, 2, 3])
+            ax.set_xticklabels(['Never (0)', 'Low (1)', 'Moderate (2)', 'High (3)'])
+
         st.pyplot(fig)
+
+    # Detailed Correspondence Analysis
+    st.subheader("Detailed Correspondence Analysis")
+    # Define labels for correspondence analysis (same as before)
+
+    # Correspondence Analysis code (same as before)
 
     # Target distribution
     st.subheader("Approval & Rejection")
-    
-    # Calculate approval rate
     approval_rate = data['Approved'].mean() * 100
     st.write(f"Approval Rate: {approval_rate:.2f}%")
     
@@ -115,6 +126,7 @@ with tab1:
     ax.set_xlabel("Approved")
     ax.set_ylabel("Count")
     st.pyplot(fig)
+
 
 with tab2:
     st.header("Modeling")
@@ -128,23 +140,16 @@ with tab2:
     categorical_cols = X.select_dtypes(include=['object']).columns
 
     # Preprocessing pipelines for numerical and categorical features
-    numerical_pipeline = Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='median')),
-        ('scaler', StandardScaler())
-    ])
+    numerical_pipeline = Pipeline(steps=[('imputer', SimpleImputer(strategy='median')),
+                                         ('scaler', StandardScaler())])
 
-    categorical_pipeline = Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='most_frequent')),
-        ('onehot', OneHotEncoder(handle_unknown='ignore'))
-    ])
+    categorical_pipeline = Pipeline(steps=[('imputer', SimpleImputer(strategy='most_frequent')),
+                                           ('onehot', OneHotEncoder(handle_unknown='ignore'))])
 
     # Combine preprocessing pipelines
     preprocessor = ColumnTransformer(
-        transformers=[
-            ('num', numerical_pipeline, numerical_cols),
-            ('cat', categorical_pipeline, categorical_cols)
-        ]
-    )
+        transformers=[('num', numerical_pipeline, numerical_cols),
+                      ('cat', categorical_pipeline, categorical_cols)])
 
     # Define the models to evaluate
     models = {
@@ -160,8 +165,8 @@ with tab2:
     # Split the data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # Evaluate the models and get SHAP values
-    model_accuracies, shap_values = evaluate_models(models, X_train, y_train, X_test, y_test)
+    # Evaluate the models
+    model_accuracies, shap_values_dict = evaluate_models(models, X_train, y_train, X_test, y_test)
 
     # Convert results to DataFrame
     results_df = pd.DataFrame.from_dict(model_accuracies, orient='index', columns=['Accuracy'])
@@ -177,9 +182,20 @@ with tab2:
     st.subheader(f"Best Model: {best_model_name}")
     st.write(f"Accuracy: {best_model_accuracy}")
 
-    # Select and train the best model
+    # Show SHAP summary plot for the best model
+    st.subheader("SHAP Summary Plot for Best Model")
+    shap_values = shap_values_dict[best_model_name]
+    shap.summary_plot(shap_values, X_train)
+
+    # Show Variable Importance for Best Model
+    st.subheader("Variable Importance for Best Model")
     best_model = models[best_model_name]
     best_model.fit(X_train, y_train)
+    
+    # Using Permutation Importance
+    perm = PermutationImportance(best_model, random_state=42).fit(X_train, y_train)
+    eli5.show_weights(perm, feature_names=X_train.columns.tolist())
+
 
 with tab3:
     st.header("Scoring")
@@ -223,10 +239,5 @@ with tab3:
         st.write(custom_data)
 
         # Download the scored data
-        csv = custom_data.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download Scored Data",
-            data=csv,
-            file_name='scored_data.csv',
-            mime='text/csv',
-        )
+        csv = custom_data.to_csv(index=False).encode()
+        st.download_button("Download Scored Data", data=csv, file_name='scored_data.csv', mime='text/csv')
