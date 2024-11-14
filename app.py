@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 
 # Load your dataset
 data = pd.read_csv('approved_data.csv')
-X = data.drop("target", axis=1)
-y = data["target"]
+X = data.drop("Approved", axis=1)
+y = data["Approved"]
 
 # Split the dataset
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
