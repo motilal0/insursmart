@@ -11,4 +11,4 @@ scikit-plot==0.3.7
 shap==0.44.1
 prince==0.13.0
 adjustText==1.2.0
-eli5
+eli5==0.11.0
