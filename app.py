@@ -10,9 +10,10 @@ from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import accuracy_score
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
@@ -24,10 +25,8 @@ st.write("Dataset loaded successfully!")
 # Function to evaluate models
 def evaluate_models(models, X_train, y_train, X_test, y_test):
     results = {}
-    for name in models.keys():
-        model = models[name]
-        pipeline = Pipeline(steps=[('preprocessor', preprocessor),
-                                   ('classifier', model)])
+    for name, model in models.items():
+        pipeline = Pipeline(steps=[('preprocessor', preprocessor), ('classifier', model)])
         pipeline.fit(X_train, y_train)
         y_pred = pipeline.predict(X_test)
         accuracy = accuracy_score(y_test, y_pred)
@@ -51,14 +50,20 @@ with tab1:
     st.subheader("Missing Values")
     st.write(data.isnull().sum())
 
-    # Target distribution
-    st.subheader("Approval & Rejection")
-    
-    fig, ax = plt.subplots()
-    sns.countplot(x='Approved', data=data, ax=ax)
-    ax.set_xlabel("Approved")
-    ax.set_ylabel("Count")
-    st.pyplot(fig)
+    # Histograms for categorical features
+    st.subheader("Histograms for Selected Categorical Features")
+    categorical_columns = ['Smoking Status', 'Medical History', 'Alcohol Consumption']
+    for column in categorical_columns:
+        fig, ax = plt.subplots()
+        counts = data[column].value_counts(normalize=True) * 100
+        sns.barplot(x=counts.index, y=counts.values, ax=ax)
+        ax.set_title(f'Distribution of {column}')
+        ax.set_xlabel(column)
+        ax.set_ylabel("Percentage")
+        for p in ax.patches:
+            ax.annotate(f'{p.get_height():.2f}%', (p.get_x() + p.get_width() / 2., p.get_height()), ha='center', 
+                        va='center', fontsize=11, color='black', xytext=(0, 10), textcoords='offset points')
+        st.pyplot(fig)
 
 with tab2:
     st.header("Modeling")
@@ -115,41 +120,37 @@ with tab2:
     st.subheader("Model Accuracies")
     st.write(results_df)
 
-    # Highlight the best model dynamically
-    best_model_name = results_df.index[0]
-    best_model_accuracy = results_df.iloc[0, 0]
-    st.subheader(f"Best Model: {best_model_name}")
-    st.write(f"Accuracy: {best_model_accuracy}")
-
-    # Select and train the best model
+    # Select and train the best model (Random Forest used here for SHAP)
+    best_model_name = 'Random Forest'
     best_model = models[best_model_name]
-    pipeline = Pipeline(steps=[('preprocessor', preprocessor),
-                               ('classifier', best_model)])
+    pipeline = Pipeline(steps=[('preprocessor', preprocessor), ('classifier', best_model)])
     pipeline.fit(X_train, y_train)
+    st.subheader(f"Best Model Selected: {best_model_name}")
 
-    # Transform X_test using the preprocessor only
+    # Applying SHAP to explain the best model
+    st.subheader("SHAP Explanation for a Sample Prediction")
+    
+    # Transform X_test with preprocessing
     X_test_transformed = pipeline.named_steps['preprocessor'].transform(X_test)
-
-    # Create SHAP explainer using the best model and transformed test data
-    explainer = shap.Explainer(pipeline.named_steps["classifier"], X_test_transformed)
-
-    # Calculate SHAP values
+    
+    # Fit SHAP explainer on the Random Forest model
+    explainer = shap.Explainer(pipeline.named_steps['classifier'], X_test_transformed)
+    
+    # Generate SHAP values
     shap_values = explainer(X_test_transformed)
-
-    # Streamlit plot for variable importance (feature importance with SHAP)
-    st.subheader("Variable Importance (SHAP)")
-
-    # SHAP summary plot for feature importance
+    
+    # Select a single instance for SHAP explanation (first row of X_test)
+    single_obs = X_test_transformed[0].reshape(1, -1)
+    shap_values_single = explainer(single_obs)
+    
+    # Waterfall plot for a single observation
     fig, ax = plt.subplots()
-    shap.summary_plot(shap_values, X_test_transformed, plot_type="bar", show=False)
+    shap.plots.waterfall(shap_values_single[0], show=False)
     st.pyplot(fig)
 
-    # Display individual SHAP values for specific instances
-    st.subheader("SHAP Explanation for a Sample Prediction")
-
-    # Selecting a single instance for SHAP explanation (e.g., first row of X_test_transformed)
+    # Summary plot for SHAP values across all features
     fig, ax = plt.subplots()
-    shap.plots.waterfall(shap_values[0])
+    shap.summary_plot(shap_values, X_test_transformed, show=False)
     st.pyplot(fig)
 
 with tab3:
@@ -159,7 +160,6 @@ with tab3:
     uploaded_file = st.file_uploader("Upload your dataset for scoring", type="csv")
     
     if uploaded_file is not None:
-        # Load the uploaded data
         custom_data = pd.read_csv(uploaded_file)
         st.write("Uploaded data:")
         st.write(custom_data.head())
