@@ -197,10 +197,11 @@ with tab2:
     )
 
     # Define the models to evaluate
-    models = {
-        'Logistic Regression': LogisticRegression(max_iter=1000),
         # 'Decision Tree': DecisionTreeClassifier(),
         # 'Random Forest': RandomForestClassifier(),
+
+    models = {
+        'Logistic Regression': LogisticRegression(max_iter=1000),
         'Gradient Boosting': GradientBoostingClassifier(),
         'Support Vector Machine': SVC(),
         'K-Nearest Neighbors': KNeighborsClassifier(),
