@@ -11,8 +11,9 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import accuracy_score
 from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+# from sklearn.tree import DecisionTreeClassifier
+# from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
@@ -198,11 +199,11 @@ with tab2:
 
     # Define the models to evaluate
         # 'Decision Tree': DecisionTreeClassifier(),
-        # 'Random Forest': RandomForestClassifier(),
+        # 'Gradient Boosting': GradientBoostingClassifier(),
 
     models = {
         'Logistic Regression': LogisticRegression(max_iter=1000),
-        'Gradient Boosting': GradientBoostingClassifier(),
+        'Random Forest': RandomForestClassifier(),
         'Support Vector Machine': SVC(),
         'K-Nearest Neighbors': KNeighborsClassifier(),
         'Naive Bayes': GaussianNB()
